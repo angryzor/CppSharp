@@ -439,6 +439,18 @@ namespace CppSharp.Generators.CSharp
                 WriteLine($"private bool __{prop.Field.OriginalName}_OwnsNativeMemory = false;");
             }
 
+            if (!@class.IsAbstractImpl && @class.IsRefType && Options.GenerateNativeToManagedFor(@class))
+            {
+                PushBlock(BlockKind.Class);
+                WriteLines($@"public new class __InteropIsomorphism : global::RangersSDK.Interop.InteropIsomorphism<{@class.Name}, nint>
+{{
+    public nint GetUnmanaged({@class.Name} obj) {{ return obj.__Instance; }}
+    public {@class.Name} GetManaged(nint obj) {{ return {@class.Name}.__GetOrCreateInstance(obj, true); }}
+    public void ReleaseUnmanaged(nint obj) {{ }}
+}}");
+                PopBlock(NewLineKind.BeforeNextBlock);
+            }
+
             GenerateClassConstructors(@class);
 
             GenerateClassMethods(@class.Methods);
