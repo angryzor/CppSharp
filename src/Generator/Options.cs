@@ -261,6 +261,10 @@ namespace CppSharp
 
         public TranslationUnitPassCallBack TranslationUnitPassPostCallBack { get; set; }
 
+        public delegate void CustomClassCodeCallbackDelegate(CodeGenerator generator, Class @class);
+
+        public CustomClassCodeCallbackDelegate CustomClassCodeCallback { get; set; }
+
         #endregion
     }
 
