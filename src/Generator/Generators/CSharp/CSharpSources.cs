@@ -434,12 +434,23 @@ namespace CppSharp.Generators.CSharp
             }
 
             // Add booleans to track who owns unmanaged memory for string fields
+            if (@class.IsValueType)
+            {
+                foreach (var @base in @class.Bases.Where(b => b.IsClass && !b.Class.Ignore && b.Class.IsDeclared))
+                {
+                    foreach (var prop in @base.Class.GetConstCharFieldProperties())
+                    {
+                        WriteLine($"private bool __{prop.Field.OriginalName}_OwnsNativeMemory = false;");
+                    }
+                }
+            }
+
             foreach (var prop in @class.GetConstCharFieldProperties())
             {
                 WriteLine($"private bool __{prop.Field.OriginalName}_OwnsNativeMemory = false;");
             }
 
-            Options.CustomClassCodeCallback(this, @class);
+            if (Options.CustomClassCodeCallback != null) Options.CustomClassCodeCallback(this, @class);
 
             GenerateClassConstructors(@class);
 
@@ -1277,13 +1288,13 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
                 var var = decl as Variable;
                 this.GenerateMember(@class, c => GenerateVariableGetter(
                     c is ClassTemplateSpecialization ?
-                        c.Variables.First(v => v.Name == decl.Name) : var));
+                        c.Variables.First(v => v.Name == decl.Name) : var, var));
             }
             UnindentAndWriteCloseBrace();
             PopBlock(NewLineKind.BeforeNextBlock);
         }
 
-        private bool GenerateVariableGetter(Variable var)
+        private bool GenerateVariableGetter(Variable var, Variable declVar)
         {
             string ptr = GeneratePointerTo(var);
 
@@ -1328,12 +1339,17 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
             if (ctx.HasCodeBlock)
                 Indent();
 
-            WriteLine("return {0};", marshal.Context.Return);
+            Write("return ");
+
+            if (var.Type.Desugar().IsPointer() && declVar.Type.IsDependent)
+                Write($"({declVar.Type}) (object) ");
+
+            WriteLine("{0};", marshal.Context.Return);
 
             if (ctx.HasCodeBlock)
                 UnindentAndWriteCloseBrace();
 
-            return true;
+            return false;
         }
 
         private bool GenerateFunctionGetter(Class @class, Property property)
@@ -2511,7 +2527,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
             var hasBaseClass = @class.HasBaseClass && @class.BaseClass.IsRefType;
             if (hasBaseClass)
-                WriteLineIndent(": base((void*) native)", @class.BaseClass.Visit(TypePrinter));
+                WriteLineIndent(": base((void*) native, skipVTables)", @class.BaseClass.Visit(TypePrinter));
 
             WriteOpenBraceAndIndent();
 

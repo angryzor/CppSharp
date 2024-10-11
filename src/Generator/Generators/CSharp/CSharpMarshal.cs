@@ -103,8 +103,8 @@ namespace CppSharp.Generators.CSharp
                                     Helpers.InternalStruct, Context.ReturnVarName);
                             else
                                 supportBefore.WriteLineIndent(
-                                    $@"{value}[i] = {finalArrayType}.{Helpers.CreateInstanceIdentifier}(({
-                                        typePrinter.IntPtrType}) {Context.ReturnVarName}[i]);");
+                                    $@"{value}[i] = {finalArrayType}.{Helpers.GetOrCreateInstanceIdentifier}(({
+                                        typePrinter.IntPtrType}) {Context.ReturnVarName}[i], false, true);");
                         }
                         else
                         {
@@ -212,7 +212,7 @@ namespace CppSharp.Generators.CSharp
                     if (Context.MarshalKind == MarshalKind.NativeField)
                     {
                         // returned structs must be blittable and bool isn't
-                        Context.Return.Write("{0} != 0", Context.ReturnVarName);
+                        Context.Return.Write("({0} != 0)", Context.ReturnVarName);
                         return true;
                     }
                     goto default;
@@ -392,11 +392,11 @@ namespace CppSharp.Generators.CSharp
             {
                 var dtor = originalClass.Destructors.FirstOrDefault();
                 var dtorVirtual = (dtor != null && dtor.IsVirtual);
-                var cache = dtorVirtual && Context.Parameter == null;
-                var skipVTables = dtorVirtual && Context.Parameter != null;
+                var cache = dtorVirtual && (Context.MarshalKind != MarshalKind.NativeField && Context.Parameter == null);
+                var skipVTables = dtorVirtual && (Context.MarshalKind == MarshalKind.NativeField || Context.Parameter != null);
                 var get = Context.Context.Options.GenerateNativeToManagedFor(@class) ? "GetOr" : "";
                 Context.Before.WriteLine("var {0} = {1}.__{5}CreateInstance({2}, {3}{4});",
-                    ret, qualifiedClass, Context.ReturnVarName, cache ? "true" : "false", skipVTables ? ", skipVTables: true" : string.Empty, get);
+                    ret, qualifiedClass, Context.ReturnVarName, "false", ", skipVTables: true", get);
             }
             else
             {
@@ -703,10 +703,7 @@ namespace CppSharp.Generators.CSharp
                  replacement.IsEnum()) &&
                 !replacement.IsConstCharString())
             {
-                Context.Return.Write($"({replacement}) ");
-                if (replacement.IsPointerToPrimitiveType())
-                    Context.Return.Write($"({typePrinter.IntPtrType}) ");
-                Context.Return.Write("(object) ");
+                Context.Parameter.Name = $"({replacement}) {(replacement.IsPointerToPrimitiveType() ? $"({typePrinter.IntPtrType}) " : "")}(object) {Context.Parameter.Name}";
             }
             return base.VisitTemplateParameterSubstitutionType(param, quals);
         }
