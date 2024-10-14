@@ -378,7 +378,9 @@
 
         public static bool IsConst(this QualifiedType type)
         {
-            return type.Type != null && (type.Qualifiers.IsConst);
+            return type.Type != null && type.Qualifiers.IsConst;
+            //return type.Type != null && (type.Qualifiers.IsConst ||
+            //    type.Type.GetQualifiedPointee().IsConst());
         }
 
         public static QualifiedType StripConst(this QualifiedType type)

@@ -265,6 +265,11 @@ namespace CppSharp
 
         public CustomClassCodeCallbackDelegate CustomClassCodeCallback { get; set; }
 
+        public string AllocFunction { get; set; } = "Marshal.AllocHGlobal";
+        public string FreeFunction { get; set; } = "Marshal.FreeHGlobal";
+
+        public string SymbolResolutionPostProcessor { get; set; } = null;
+
         #endregion
     }
 

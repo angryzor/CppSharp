@@ -87,12 +87,12 @@ namespace CppSharp.AST
         {
             foreach (var @base in @class.Bases.Where(b => b.IsClass))
             {
-                Class baseClass = @base.Class.OriginalClass ?? @base.Class;
+                Class baseClass = @base.Class.IsInterface ? @base.Class : (@base.Class.OriginalClass ?? @base.Class);
                 Property baseProperty = baseClass.Properties.Find(p =>
                     (@override.GetMethod?.IsOverride == true &&
-                     @override.GetMethod.BaseMethod == p.GetMethod) ||
+                     @override.GetMethod.BaseMethod == (p.GetMethod?.OriginalFunction ?? p.GetMethod)) ||
                     (@override.SetMethod?.IsOverride == true &&
-                     @override.SetMethod.BaseMethod == p.SetMethod) ||
+                     @override.SetMethod.BaseMethod == (p.SetMethod?.OriginalFunction ?? p.SetMethod)) ||
                     (@override.Field != null && @override.Field == p.Field));
                 if (baseProperty != null)
                     return baseProperty;

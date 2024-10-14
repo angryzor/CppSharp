@@ -703,7 +703,9 @@ namespace CppSharp.Generators.CSharp
                  replacement.IsEnum()) &&
                 !replacement.IsConstCharString())
             {
-                Context.Parameter.Name = $"({replacement}) {(replacement.IsPointerToPrimitiveType() ? $"({typePrinter.IntPtrType}) " : "")}(object) {Context.Parameter.Name}";
+                var replacementVarName = Generator.GeneratedIdentifier($@"__replacement_{Context.Parameter.Name}{Context.ParameterIndex}");
+                Context.Before.Write($"var {replacementVarName} = ({replacement}) {(replacement.IsPointerToPrimitiveType() ? $"({typePrinter.IntPtrType}) " : "")}(object) {Context.Parameter.Name};");
+                Context.Parameter.Name = replacementVarName;
             }
             return base.VisitTemplateParameterSubstitutionType(param, quals);
         }

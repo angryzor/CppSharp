@@ -105,7 +105,7 @@ namespace CppSharp.Generators.CSharp
             }
 
             foreach (var lib in LibrarySymbolTables)
-                WriteLine(lib.Value.Generate());
+                WriteLine(lib.Value.Generate(Options.SymbolResolutionPostProcessor));
 
             GenerateExternalClassTemplateSpecializations();
         }
@@ -2422,7 +2422,7 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
             else
             {
                 WriteLine("if ({0})", Helpers.OwnsNativeInstanceIdentifier);
-                WriteLineIndent("Marshal.FreeHGlobal({0});", Helpers.InstanceIdentifier);
+                WriteLineIndent("{1}({0});", Helpers.InstanceIdentifier, Options.FreeFunction);
 
                 WriteLine("{0} = IntPtr.Zero;", Helpers.InstanceIdentifier);
             }
@@ -2624,14 +2624,14 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
                     string defaultValue = string.Empty;
                     if (copyCtorMethod.Parameters.Count > 1)
                         defaultValue = $", {ExpressionPrinter.VisitParameter(copyCtorMethod.Parameters.Last())}";
-                    WriteLine($@"var ret = Marshal.AllocHGlobal(sizeof({@internal}));");
+                    WriteLine($@"var ret = {Options.AllocFunction}(sizeof({@internal}));");
                     WriteLine($@"{printed}.{GetFunctionNativeIdentifier(copyCtorMethod)}(ret, new {TypePrinter.IntPtrType}(&native){defaultValue});",
                         printed, GetFunctionNativeIdentifier(copyCtorMethod));
                     WriteLine("return ret.ToPointer();");
                 }
                 else
                 {
-                    WriteLine($"var ret = Marshal.AllocHGlobal(sizeof({@internal}));");
+                    WriteLine($"var ret = {Options.AllocFunction}(sizeof({@internal}));");
                     WriteLine($"*({@internal}*) ret = native;");
                     WriteLine("return ret.ToPointer();");
                 }
@@ -3059,7 +3059,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
             var @internal = TypePrinter.PrintNative(
                 @class.IsAbstractImpl ? @class.BaseClass : @class);
-            WriteLine($"{Helpers.InstanceIdentifier} = Marshal.AllocHGlobal(sizeof({@internal}));");
+            WriteLine($"{Helpers.InstanceIdentifier} = {Options.AllocFunction}(sizeof({@internal}));");
             WriteLine($"{Helpers.OwnsNativeInstanceIdentifier} = true;");
 
             if (generateNativeToManaged)
@@ -3146,6 +3146,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
             var @params = GenerateFunctionParamsMarshal(function.Parameters);
 
+            bool managedConstruct = false;
             var originalFunction = function.OriginalFunction ?? function;
 
             if (originalFunction.HasIndirectReturnTypeParameter)
@@ -3165,7 +3166,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
                     Class retClass;
                     type.TryGetClass(out retClass);
                     var @class = retClass.OriginalClass ?? retClass;
-                    WriteLine($@"var {Helpers.ReturnIdentifier} = new {TypePrinter.PrintNative(@class)}();");
+                    WriteLine($"var {Helpers.ReturnIdentifier}_mem = ({TypePrinter.PrintNative(@class)}*){Options.AllocFunction}(sizeof({TypePrinter.PrintNative(@class)}));");
                 }
                 else
                 {
@@ -3176,11 +3177,13 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
                             Type = indirectRetType.Type.Desugar()
                         };
 
-                        WriteLine("{0} {1};", typeMap.SignatureType(typePrinterContext),
-                            Helpers.ReturnIdentifier);
+                        WriteLine($"var {Helpers.ReturnIdentifier}_mem = ({typeMap.SignatureType(typePrinterContext)}*){Options.AllocFunction}(sizeof({typeMap.SignatureType(typePrinterContext)}));");
                     }
                     else
+                    {
                         WriteLine("var {0} = {1};", Helpers.ReturnIdentifier, construct);
+                        managedConstruct = true;
+                    }
                 }
             }
 
@@ -3203,7 +3206,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
             if (originalFunction.HasIndirectReturnTypeParameter)
             {
-                var name = string.Format("new IntPtr(&{0})", Helpers.ReturnIdentifier);
+                var name = string.Format($"new IntPtr({(managedConstruct ? $"&{Helpers.ReturnIdentifier}" : $"{Helpers.ReturnIdentifier}_mem")})");
                 names.Insert(0, name);
             }
 
@@ -3241,7 +3244,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
             if (method != null && !method.IsConstructor && method.OriginalFunction != null &&
                 ((Method)method.OriginalFunction).IsConstructor)
             {
-                WriteLine($@"Marshal.AllocHGlobal({((Class)method.OriginalNamespace).Layout.Size});");
+                WriteLine($@"{Options.AllocFunction}({((Class)method.OriginalNamespace).Layout.Size});");
                 names.Insert(0, Helpers.ReturnIdentifier);
             }
             WriteLine("{0}({1});", functionName, string.Join(", ", names));
@@ -3263,6 +3266,12 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
             if (needsReturn)
             {
+                if (originalFunction.HasIndirectReturnTypeParameter && !managedConstruct)
+                {
+                    WriteLine($"var {Helpers.ReturnIdentifier} = *{Helpers.ReturnIdentifier}_mem;");
+                    WriteLine($"{Options.FreeFunction}((__IntPtr){Helpers.ReturnIdentifier}_mem);");
+                }
+
                 var ctx = new CSharpMarshalContext(Context, CurrentIndentation)
                 {
                     ArgName = Helpers.ReturnIdentifier,

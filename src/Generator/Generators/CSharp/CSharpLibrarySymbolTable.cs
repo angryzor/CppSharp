@@ -20,7 +20,7 @@ namespace CppSharp.Generators.CSharp
             this.@namespace = (!string.IsNullOrEmpty(@namespace) ? @namespace : @class) + ".__Symbols";
         }
 
-        public string Generate()
+        public string Generate(string symbolResolutionPostProcessor)
         {
             using (WriteBlock($"namespace {@namespace}"))
             {
@@ -36,7 +36,7 @@ namespace CppSharp.Generators.CSharp
                         WriteLine("if (image == IntPtr.Zero) throw new global::System.DllNotFoundException(path);");
 
                         foreach (var (mangled, variableIdentifier) in symbols)
-                            WriteLine($"{variableIdentifier} = CppSharp.SymbolResolver.ResolveSymbol(image, \"{mangled}\");");
+                            WriteLine($"{variableIdentifier} = {symbolResolutionPostProcessor ?? ""}(CppSharp.SymbolResolver.ResolveSymbol(image, \"{mangled}\"));");
                     }
                 }
             }
